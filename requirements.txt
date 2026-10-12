@@ -1,6 +1,6 @@
 fastapi
-uvicorn 
-pydantic
+uvicorn[standard]
+pydantic>=2
 pydantic-settings
 pytest
 httpx
