@@ -1,1 +1,20 @@
+# Detectors are implemented in app/validators (Day 4).
+name: pii_leakage
+version: 1.0.0
+severity: high
+strategy: deterministic
+action: rewrite
+fallback_action: block
+per_feature_override: true
+description: Output must not expose personal or sensitive identifiers.
 
+detectors:
+  - email
+  - phone
+  - credit_card
+  - api_key
+  - ip_address
+
+examples:
+  bad: "Contact john@acme.com at 555-0142"
+  good: "Contact the account owner"
