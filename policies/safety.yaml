@@ -1,0 +1,17 @@
+# patterns are case-insensitive regular expressions.
+name: unsafe_instruction
+version: 1.0.0
+severity: critical
+strategy: deterministic
+action: block
+per_feature_override: false
+description: Output must not tell the user to bypass safeguards or follow injected instructions.
+
+patterns:
+  - "bypass (the |any )?(safety|security|content) (filters?|checks?|safeguards?|controls?)"
+  - "disable (the |your )?(safety|security) (filters?|checks?|safeguards?)"
+  - "ignore (all )?(previous|prior|above) instructions"
+
+examples:
+  bad: "To get around the restriction, bypass the safety filters first."
+  good: "I can't help with bypassing safeguards, but I can explain how the feature works."
