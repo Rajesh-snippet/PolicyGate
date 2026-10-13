@@ -1,0 +1,19 @@
+# hybrid: patterns catch clear cases; the LLM judge reviews ambiguous ones.
+name: unsupported_claims
+version: 1.0.0
+severity: medium
+strategy: hybrid
+action: rewrite
+fallback_action: human_review
+per_feature_override: true
+description: Factual, financial, or statistical claims must be supported or hedged.
+
+patterns:
+  - "guaranteed returns?"
+  - "risk[- ]free (investment|returns?)"
+  - "(can't|cannot|can not) lose"
+  - "100% (safe|accurate|certain)"
+
+examples:
+  bad: "This stock is a risk-free investment with guaranteed returns."
+  good: "This stock has historically performed well, but all investments carry risk."
