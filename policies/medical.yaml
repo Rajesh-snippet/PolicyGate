@@ -1,0 +1,18 @@
+# patterns are case-insensitive regular expressions.
+name: medical_overconfidence
+version: 1.0.0
+severity: high
+strategy: deterministic
+action: rewrite
+fallback_action: block
+per_feature_override: true
+description: Output must not make guaranteed or absolute medical claims.
+
+patterns:
+  - "will definitely cure"
+  - "100% effective"
+  - "guaranteed cure"
+
+examples:
+  bad: "This medicine will definitely cure you."
+  good: "This medicine may help, but results vary. Consult a doctor."
