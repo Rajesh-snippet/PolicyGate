@@ -1,0 +1,16 @@
+# json_schema detector is implemented in app/validators (Day 3).
+name: schema_mismatch
+version: 1.0.0
+severity: medium
+strategy: deterministic
+action: rewrite
+fallback_action: block
+per_feature_override: true
+description: Structured output must match the schema registered for the feature.
+
+detectors:
+  - json_schema
+
+examples:
+  bad: '{"answer": "The weather may improve tomorrow."}'
+  good: '{"answer": "The weather may improve tomorrow.", "confidence": 0.72}'
