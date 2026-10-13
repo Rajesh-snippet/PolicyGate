@@ -1,0 +1,14 @@
+name: brand_tone
+version: 1.0.0
+severity: low
+strategy: llm_judge
+action: approve_with_warning
+fallback_action: human_review
+per_feature_override: true
+description: >
+  Responses should be professional, respectful, and plain-spoken.
+  No insults, sarcasm toward the user, or slang that clashes with the brand voice.
+
+examples:
+  bad: "Wow, that's a really dumb question lol."
+  good: "Good question. Here's how it works."
