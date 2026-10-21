@@ -40,3 +40,19 @@ def test_metrics_are_perfect_on_the_starter_set(examples, registry):
         assert m.fp == 0 and m.fn == 0, name
     assert metrics["pii_leakage"].recall == 1.0
     assert metrics["pii_leakage"].false_positive_rate == 0.0
+
+
+def test_judge_layer_examples_can_be_scored_with_a_judge(examples, registry):
+    from app.judge.judge import LLMJudge
+    from tests.fakes import FakeClient, verdict
+
+    def rude_only(user_prompt):
+        if "dumb question" in user_prompt:
+            return verdict("brand_tone", "Wow, that's a really dumb question lol.", "low")
+        return '{"violations": []}'
+
+    judge = LLMJudge.from_registry(registry, FakeClient({"brand_tone": rude_only}))
+    checks = DeterministicChecks.from_registry(registry)
+    metrics = evaluate(examples, checks, [p.name for p in registry.all()], judge)
+    assert metrics["brand_tone"].tp == 1
+    assert metrics["brand_tone"].fp == 0
