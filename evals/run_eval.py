@@ -3,16 +3,20 @@
 Usage (from the project root):
     python -m evals.run_eval
 
-Only examples with layer == "deterministic" are scored against the
-deterministic checks. "judge" examples are labeled now and scored once the
-LLM judge exists (Day 6).
+By default only examples with layer == "deterministic" are scored, against the
+deterministic checks. With --judge, every example is scored against the
+deterministic checks plus the LLM judge (needs an API key in .env; this makes
+live API calls, roughly one or two per judged policy per example):
+    python -m evals.run_eval --judge
 """
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
+from app.judge.judge import LLMJudge
 from app.models import Decision
 from app.pipeline import DeterministicChecks
 from app.policies import load_policies
@@ -55,20 +59,34 @@ def load_dataset(path: Path | str = DEFAULT_DATASET) -> list[EvalExample]:
     return [EvalExample.model_validate_json(line) for line in lines if line.strip()]
 
 
-def detected_policies(checks: DeterministicChecks, example: EvalExample) -> set[str]:
+def detected_policies(
+    checks: DeterministicChecks, example: EvalExample, judge: LLMJudge | None = None
+) -> set[str]:
     result = checks.run(example.feature_id, example.llm_output)
-    return {finding.policy for finding in result.findings}
+    found = {finding.policy for finding in result.findings}
+    if judge is not None:
+        review = judge.review(
+            example.feature_id,
+            example.user_prompt,
+            example.llm_output,
+            deterministic=result,
+        )
+        found |= {finding.policy for finding in review.findings}
+    return found
 
 
 def evaluate(
-    examples: list[EvalExample], checks: DeterministicChecks, policy_names: list[str]
+    examples: list[EvalExample],
+    checks: DeterministicChecks,
+    policy_names: list[str],
+    judge: LLMJudge | None = None,
 ) -> dict[str, PolicyMetrics]:
     metrics = {name: PolicyMetrics() for name in policy_names}
     for example in examples:
-        if example.layer != "deterministic":
+        if judge is None and example.layer != "deterministic":
             continue
         expected = set(example.expected_policies)
-        found = detected_policies(checks, example)
+        found = detected_policies(checks, example, judge)
         for name, m in metrics.items():
             if name in expected and name in found:
                 m.tp += 1
@@ -86,15 +104,26 @@ def _fmt(value: float | None) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--judge", action="store_true", help="also score with the LLM judge")
+    args = parser.parse_args()
+
     registry = load_policies()
     checks = DeterministicChecks.from_registry(registry)
     examples = load_dataset()
     names = [p.name for p in registry.all()]
-    metrics = evaluate(examples, checks, names)
 
-    scored = sum(1 for e in examples if e.layer == "deterministic")
-    print(f"policy version {registry.version} | {scored} deterministic examples scored "
-          f"of {len(examples)}\n")
+    judge = None
+    if args.judge:
+        from app.config import get_settings
+        from app.judge.client import build_judge_client
+
+        judge = LLMJudge.from_registry(registry, build_judge_client(get_settings()))
+    metrics = evaluate(examples, checks, names, judge)
+
+    scored = len(examples) if judge else sum(1 for e in examples if e.layer == "deterministic")
+    mode = "deterministic + judge" if judge else "deterministic only"
+    print(f"policy version {registry.version} | {mode} | {scored} of {len(examples)} examples scored\n")
     print(f"{'policy':<26}{'TP':>4}{'FP':>4}{'FN':>4}{'prec':>7}{'recall':>8}{'FPR':>6}")
     for name, m in metrics.items():
         print(f"{name:<26}{m.tp:>4}{m.fp:>4}{m.fn:>4}"
