@@ -59,6 +59,16 @@ class OpenAIJudgeClient:
         return response.choices[0].message.content or ""
 
 
+class UnavailableJudgeClient:
+    """Placeholder used when no judge is configured; every call fails."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+
+    def complete(self, system: str, user: str) -> str:
+        raise JudgeConfigError(self.reason)
+
+
 def build_judge_client(settings) -> JudgeClient:
     provider = settings.judge_provider
     if provider == "anthropic":
