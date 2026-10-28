@@ -8,6 +8,8 @@ from typing import Protocol
 
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 
 class JudgeConfigError(Exception):
@@ -38,12 +40,24 @@ class AnthropicJudgeClient:
 
 
 class OpenAIJudgeClient:
-    def __init__(self, api_key: str, model: str = DEFAULT_OPENAI_MODEL, timeout: float = 20.0):
+    """Chat-completions client. Also serves any OpenAI-compatible API via base_url."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = DEFAULT_OPENAI_MODEL,
+        timeout: float = 20.0,
+        base_url: str | None = None,
+    ):
         try:
             import openai
         except ImportError as exc:
-            raise JudgeConfigError("pip install openai to use the openai judge") from exc
-        self._client = openai.OpenAI(api_key=api_key, timeout=timeout)
+            raise JudgeConfigError("pip install openai to use the openai/groq judge") from exc
+        # max_retries lets the SDK back off and retry on rate limits (429), which
+        # matters on free tiers.
+        self._client = openai.OpenAI(
+            api_key=api_key, timeout=timeout, base_url=base_url, max_retries=3
+        )
         self._model = model
 
     def complete(self, system: str, user: str) -> str:
@@ -59,6 +73,13 @@ class OpenAIJudgeClient:
         return response.choices[0].message.content or ""
 
 
+class GroqJudgeClient(OpenAIJudgeClient):
+    """Groq's API is OpenAI-compatible, so it reuses the OpenAI SDK with Groq's base URL."""
+
+    def __init__(self, api_key: str, model: str = DEFAULT_GROQ_MODEL, timeout: float = 20.0):
+        super().__init__(api_key, model, timeout, base_url=GROQ_BASE_URL)
+
+
 class UnavailableJudgeClient:
     """Placeholder used when no judge is configured; every call fails."""
 
@@ -71,6 +92,14 @@ class UnavailableJudgeClient:
 
 def build_judge_client(settings) -> JudgeClient:
     provider = settings.judge_provider
+    if provider == "groq":
+        if not settings.groq_api_key:
+            raise JudgeConfigError("GROQ_API_KEY is not set")
+        return GroqJudgeClient(
+            settings.groq_api_key,
+            settings.judge_model or DEFAULT_GROQ_MODEL,
+            settings.judge_timeout_s,
+        )
     if provider == "anthropic":
         if not settings.anthropic_api_key:
             raise JudgeConfigError("ANTHROPIC_API_KEY is not set")
