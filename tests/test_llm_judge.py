@@ -214,3 +214,39 @@ def test_factory_requires_an_api_key():
     settings.judge_provider = "nope"
     with pytest.raises(JudgeConfigError):
         build_judge_client(settings)
+
+
+def _settings(**overrides):
+    base = dict(
+        judge_provider="groq", groq_api_key=None, anthropic_api_key=None, openai_api_key=None,
+        judge_model=None, judge_timeout_s=5.0,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_groq_requires_an_api_key():
+    with pytest.raises(JudgeConfigError, match="GROQ_API_KEY"):
+        build_judge_client(_settings())
+
+
+def test_groq_client_uses_groqs_endpoint_and_default_model():
+    pytest.importorskip("openai")
+    from app.judge.client import DEFAULT_GROQ_MODEL, GroqJudgeClient
+
+    client = build_judge_client(_settings(groq_api_key="gsk_fake"))
+    assert isinstance(client, GroqJudgeClient)
+    assert str(client._client.base_url).startswith("https://api.groq.com/openai/v1")
+    assert client._model == DEFAULT_GROQ_MODEL
+
+
+def test_groq_model_can_be_overridden():
+    pytest.importorskip("openai")
+    client = build_judge_client(_settings(groq_api_key="gsk_fake", judge_model="openai/gpt-oss-20b"))
+    assert client._model == "openai/gpt-oss-20b"
+
+
+def test_groq_is_the_default_provider():
+    from app.config import Settings
+
+    assert Settings(_env_file=None).judge_provider == "groq"
