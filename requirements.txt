@@ -6,5 +6,5 @@ pytest
 httpx
 pyyaml
 # LLM judge providers (only the one you use is needed)
-anthropic
-openai
+openai      # used for Groq and OpenAI
+anthropic   # only if JUDGE_PROVIDER=anthropic
