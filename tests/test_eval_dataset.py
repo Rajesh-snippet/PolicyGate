@@ -56,3 +56,31 @@ def test_judge_layer_examples_can_be_scored_with_a_judge(examples, registry):
     metrics = evaluate(examples, checks, [p.name for p in registry.all()], judge)
     assert metrics["brand_tone"].tp == 1
     assert metrics["brand_tone"].fp == 0
+
+
+def test_full_pipeline_decisions_match_labels_with_a_quiet_judge(examples, registry, tmp_path):
+    from app.audit import JsonlAuditLog
+    from app.decision import DecisionEngine
+    from app.judge.judge import LLMJudge
+    from app.models import GuardRequest
+    from app.service import GuardService
+    from tests.fakes import FakeClient
+
+    service = GuardService(
+        DeterministicChecks.from_registry(registry),
+        LLMJudge.from_registry(registry, FakeClient()),  # finds nothing
+        DecisionEngine(),
+        JsonlAuditLog(tmp_path / "audit.jsonl"),
+        registry.version,
+    )
+    for example in examples:
+        if example.layer != "deterministic":
+            continue
+        response = service.guard(
+            GuardRequest(
+                feature_id=example.feature_id,
+                user_prompt=example.user_prompt,
+                llm_output=example.llm_output,
+            )
+        )
+        assert response.decision == example.expected_decision, example.id
