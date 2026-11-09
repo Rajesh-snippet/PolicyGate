@@ -37,9 +37,12 @@ class Finding(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
 
 
+
 class GuardResponse(BaseModel):
     request_id: str = Field(default_factory=lambda: str(uuid4()))
     decision: Decision
+    policy_version: str
     risk_score: float = Field(ge=0, le=1)
     findings: list[Finding] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
     final_output: str | None = None
