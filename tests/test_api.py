@@ -29,6 +29,13 @@ def test_guard_returns_valid_response():
     }
     assert 0 <= body["risk_score"] <= 1
     assert body["request_id"]
+        # Verify decision explanation and policy version are returned
+    assert "reasons" in body
+    assert isinstance(body["reasons"], list)
+
+    assert "policy_version" in body
+    assert isinstance(body["policy_version"], str)
+    assert len(body["policy_version"]) == 12
 
 
 def test_guard_rejects_missing_fields():
