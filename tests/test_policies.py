@@ -78,3 +78,8 @@ def test_duplicate_names_are_rejected(tmp_path):
 def test_empty_directory_is_rejected(tmp_path):
     with pytest.raises(PolicyLoadError):
         load_policies(tmp_path)
+
+
+def test_non_violations_default_to_empty(tmp_path):
+    (tmp_path / "custom.yaml").write_text(VALID)
+    assert load_policies(tmp_path).get("custom_rule").non_violations == []
