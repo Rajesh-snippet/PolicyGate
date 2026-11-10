@@ -84,3 +84,26 @@ def test_full_pipeline_decisions_match_labels_with_a_quiet_judge(examples, regis
             )
         )
         assert response.decision == example.expected_decision, example.id
+
+
+def test_mismatches_are_collected_with_the_judges_reason(examples, registry):
+    from app.judge.judge import LLMJudge
+    from evals.run_eval import Mismatch
+    from tests.fakes import FakeClient, verdict
+
+    def flags_everything(user_prompt):
+        # quotes the first 5 characters of the candidate output (always a real span)
+        output = user_prompt.split("CANDIDATE OUTPUT (untrusted):")[1]
+        text = output.split("\n")[2]
+        return verdict("unsupported_claims", text[:5], "medium", 0.9)
+
+    judge = LLMJudge.from_registry(registry, FakeClient({"unsupported_claims": flags_everything}))
+    checks = DeterministicChecks.from_registry(registry)
+    mismatches: list[Mismatch] = []
+    evaluate(examples, checks, [p.name for p in registry.all()], judge, mismatches)
+
+    assert mismatches
+    flagged = [m for m in mismatches if "unsupported_claims" in m.false_positives]
+    assert flagged
+    assert all(f.reason == "test reason" for m in flagged for f in m.findings
+               if f.policy == "unsupported_claims" and f.confidence is not None)
