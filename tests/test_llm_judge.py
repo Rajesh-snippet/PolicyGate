@@ -256,3 +256,16 @@ def test_groq_is_the_default_provider():
     from app.config import Settings
 
     assert Settings(_env_file=None).judge_provider == "groq"
+
+
+def test_prompt_lists_non_violations_when_the_policy_has_them(registry):
+    policy = registry.get("unsupported_claims")
+    assert policy.non_violations
+    _, user = build_prompt(policy, "q", "o")
+    assert "NOT VIOLATIONS" in user
+    assert all(text in user for text in policy.non_violations)
+
+
+def test_prompt_omits_non_violations_section_when_absent(registry):
+    _, user = build_prompt(registry.get("brand_tone"), "q", "o")
+    assert "NOT VIOLATIONS" not in user
