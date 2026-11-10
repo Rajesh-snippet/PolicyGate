@@ -94,14 +94,16 @@ def test_fenced_and_prose_wrapped_json_are_accepted():
 
 def test_low_risk_feature_uses_one_pass(registry):
     client = FakeClient()
-    review(make_judge(registry, client), feature=LOW)
-    assert len(client.calls) == 2  # two judge policies, one pass each
+    judge = make_judge(registry, client)
+    review(judge, feature=LOW)
+    assert len(client.calls) == len(judge.policies)  # one pass per judge policy
 
 
 def test_high_risk_feature_uses_two_passes_and_agreement_merges(registry):
     client = FakeClient({"brand_tone": verdict("brand_tone", "really dumb question")})
-    result = review(make_judge(registry, client), feature=HIGH)
-    assert len(client.calls) == 4  # two policies x two passes
+    judge = make_judge(registry, client)
+    result = review(judge, feature=HIGH)
+    assert len(client.calls) == 2 * len(judge.policies)  # every policy, two passes
     assert not result.disagreed
     assert len(result.findings) == 1  # same quote from both passes, reported once
 
@@ -109,11 +111,12 @@ def test_high_risk_feature_uses_two_passes_and_agreement_merges(registry):
 def test_split_passes_are_a_disagreement(registry):
     first = FakeClient({"brand_tone": verdict("brand_tone", "really dumb question")})
     second = FakeClient()  # finds nothing
-    result = review(make_judge(registry, first, second), feature=HIGH)
+    judge = make_judge(registry, first, second)
+    result = review(judge, feature=HIGH)
     assert result.disagreements == ["brand_tone"]
     assert result.disagreed
     assert [f.evidence for f in result.findings] == ["really dumb question"]  # kept for the reviewer
-    assert len(second.calls) == 2
+    assert len(second.calls) == len(judge.policies)
 
 
 def test_pass_failure_on_high_risk_marks_policy_failed(registry):
@@ -145,8 +148,11 @@ def test_high_risk_with_findings_still_runs_but_not_for_flagged_policies(registr
     deterministic = checks.run(HIGH, "This is a risk-free investment.")  # flags unsupported_claims
     client = FakeClient()
     result = review(make_judge(registry, client), feature=HIGH, deterministic=deterministic)
-    assert result.judged_policies == ["brand_tone"]
-    assert len(client.calls) == 2  # one policy, two passes
+    expected = [
+        p.name for p in make_judge(registry, client).policies if p.name != "unsupported_claims"
+    ]
+    assert result.judged_policies == expected  # the already-flagged policy is skipped
+    assert len(client.calls) == 2 * len(expected)  # two passes each
 
 
 def test_clean_deterministic_result_runs_the_judge(registry):
@@ -155,7 +161,7 @@ def test_clean_deterministic_result_runs_the_judge(registry):
     client = FakeClient()
     result = review(make_judge(registry, client), feature=LOW, deterministic=deterministic)
     assert not result.skipped
-    assert result.judged_policies == ["unsupported_claims", "brand_tone"]
+    assert result.judged_policies == [p.name for p in make_judge(registry, client).policies]
 
 
 def test_findings_keep_policy_order(registry):
