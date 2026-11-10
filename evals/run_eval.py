@@ -10,13 +10,14 @@ live API calls, roughly one or two per judged policy per example):
     python -m evals.run_eval --judge
 """
 import argparse
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel
 
-from app.judge.judge import LLMJudge
+from app.judge.judge import JudgeResult, LLMJudge
 from app.models import Decision, Finding
 from app.pipeline import DeterministicChecks
 from app.policies import load_policies
@@ -59,11 +60,13 @@ def load_dataset(path: Path | str = DEFAULT_DATASET) -> list[EvalExample]:
     return [EvalExample.model_validate_json(line) for line in lines if line.strip()]
 
 
-def findings_for(
+def review_for(
     checks: DeterministicChecks, example: EvalExample, judge: LLMJudge | None = None
-) -> list[Finding]:
+) -> tuple[list[Finding], JudgeResult | None]:
+    """All findings for an example, plus the judge's full result (None without a judge)."""
     result = checks.run(example.feature_id, example.llm_output)
     findings = list(result.findings)
+    review = None
     if judge is not None:
         review = judge.review(
             example.feature_id,
@@ -72,7 +75,13 @@ def findings_for(
             deterministic=result,
         )
         findings += review.findings
-    return findings
+    return findings, review
+
+
+def findings_for(
+    checks: DeterministicChecks, example: EvalExample, judge: LLMJudge | None = None
+) -> list[Finding]:
+    return review_for(checks, example, judge)[0]
 
 
 def detected_policies(
@@ -87,6 +96,7 @@ class Mismatch:
     expected: set[str]
     found: set[str]
     findings: list[Finding]
+    judge: JudgeResult | None = None
 
     @property
     def false_positives(self) -> set[str]:
@@ -97,23 +107,59 @@ class Mismatch:
         return self.expected - self.found
 
 
+@dataclass
+class RunStats:
+    """Tells a real judge miss apart from a judge that never got to answer."""
+
+    judged_examples: int = 0  # the judge actually ran (was not skipped)
+    failed_policy_calls: int = 0
+    examples_with_failures: int = 0
+    unverified_discarded: int = 0  # findings dropped: quote not found in the output
+    disagreements: int = 0
+
+
+def format_judge_stats(stats: RunStats) -> str:
+    return (
+        f"judge: ran on {stats.judged_examples} examples | "
+        f"{stats.failed_policy_calls} policy calls failed (in {stats.examples_with_failures} examples) | "
+        f"{stats.unverified_discarded} findings discarded (quote not in output) | "
+        f"{stats.disagreements} pass disagreements"
+    )
+
+
 def evaluate(
     examples: list[EvalExample],
     checks: DeterministicChecks,
     policy_names: list[str],
     judge: LLMJudge | None = None,
     mismatches: list[Mismatch] | None = None,
+    stats: RunStats | None = None,
+    pause: float = 0.0,
 ) -> dict[str, PolicyMetrics]:
-    """Score examples. If `mismatches` is given, wrongly flagged or missed examples are added to it."""
+    """Score examples.
+
+    mismatches: if given, wrongly flagged or missed examples are added to it.
+    stats: if given, judge failures and discards are counted in it.
+    pause: seconds to wait after each example the judge ran on (free-tier rate limits).
+    """
     metrics = {name: PolicyMetrics() for name in policy_names}
     for example in examples:
         if judge is None and example.layer != "deterministic":
             continue
         expected = set(example.expected_policies)
-        findings = findings_for(checks, example, judge)
+        findings, review = review_for(checks, example, judge)
         found = {finding.policy for finding in findings}
         if mismatches is not None and found != expected:
-            mismatches.append(Mismatch(example, expected, found, findings))
+            mismatches.append(Mismatch(example, expected, found, findings, review))
+        if review is not None and not review.skipped:
+            if stats is not None:
+                stats.judged_examples += 1
+                stats.failed_policy_calls += len(review.failed_policies)
+                stats.examples_with_failures += 1 if review.failed else 0
+                stats.unverified_discarded += review.unverified_discarded
+                stats.disagreements += len(review.disagreements)
+            if pause:
+                time.sleep(pause)
         for name, m in metrics.items():
             if name in expected and name in found:
                 m.tp += 1
@@ -136,6 +182,10 @@ def main() -> None:
     parser.add_argument(
         "--verbose", action="store_true", help="list each wrongly flagged or missed example"
     )
+    parser.add_argument(
+        "--pause", type=float, default=0.0,
+        help="seconds to wait between judged examples (helps with free-tier rate limits)",
+    )
     args = parser.parse_args()
 
     registry = load_policies()
@@ -150,7 +200,8 @@ def main() -> None:
 
         judge = LLMJudge.from_registry(registry, build_judge_client(get_settings()))
     mismatches: list[Mismatch] = []
-    metrics = evaluate(examples, checks, names, judge, mismatches)
+    stats = RunStats()
+    metrics = evaluate(examples, checks, names, judge, mismatches, stats, args.pause)
 
     scored = len(examples) if judge else sum(1 for e in examples if e.layer == "deterministic")
     mode = "deterministic + judge" if judge else "deterministic only"
@@ -159,6 +210,8 @@ def main() -> None:
     for name, m in metrics.items():
         print(f"{name:<26}{m.tp:>4}{m.fp:>4}{m.fn:>4}"
               f"{_fmt(m.precision):>7}{_fmt(m.recall):>8}{_fmt(m.false_positive_rate):>6}")
+    if judge:
+        print(f"\n{format_judge_stats(stats)}")
 
     if args.verbose:
         print(f"\n{len(mismatches)} example(s) with wrong or missed findings:")
@@ -170,6 +223,18 @@ def main() -> None:
                 print(f"  wrongly flagged: {sorted(item.false_positives)}")
             if item.false_negatives:
                 print(f"  missed:          {sorted(item.false_negatives)}")
+            review = item.judge
+            if review is not None:
+                if review.skipped:
+                    print(f"  judge skipped: {review.skip_reason}")
+                else:
+                    print(f"  judge asked about: {review.judged_policies}")
+                for policy, error in review.failed_policies.items():
+                    print(f"  judge FAILED on {policy}: {error[:120]}")
+                if review.unverified_discarded:
+                    print(f"  judge findings discarded (quote not in output): {review.unverified_discarded}")
+                if review.disagreements:
+                    print(f"  judge passes disagreed on: {review.disagreements}")
             for finding in item.findings:
                 if finding.policy in item.false_positives:
                     confidence = "-" if finding.confidence is None else f"{finding.confidence:.2f}"
