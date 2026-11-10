@@ -43,6 +43,7 @@ class Policy(BaseModel):
     patterns: list[str] = Field(default_factory=list)
     detectors: list[str] = Field(default_factory=list)
     examples: PolicyExamples | None = None
+    non_violations: list[str] = Field(default_factory=list)  # judge scope guard
 
     @field_validator("action", "fallback_action", mode="before")
     @classmethod
