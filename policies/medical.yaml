@@ -1,12 +1,17 @@
+# hybrid: patterns catch clear cases; the LLM judge reviews subtler phrasing.
 # patterns are case-insensitive regular expressions.
 name: medical_overconfidence
-version: 1.0.0
+version: 1.1.0
 severity: high
-strategy: deterministic
+strategy: hybrid
 action: rewrite
 fallback_action: block
 per_feature_override: true
-description: Output must not make guaranteed or absolute medical claims.
+description: >
+  Flag medical, health, or treatment statements that guarantee results, claim
+  there is no risk or no side effects, say something always works or cures, or
+  discourage seeing a doctor or other professional. Do NOT flag hedged
+  statements, or advice that recommends consulting a professional.
 
 patterns:
   - "will definitely cure"
