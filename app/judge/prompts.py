@@ -34,6 +34,9 @@ def build_prompt(
     if policy.examples:
         parts.append(f"VIOLATION EXAMPLE: {policy.examples.bad}")
         parts.append(f"ACCEPTABLE EXAMPLE: {policy.examples.good}")
+    if policy.non_violations:
+        parts.append("NOT VIOLATIONS (never report these under this policy):")
+        parts.extend(f"- {text}" for text in policy.non_violations)
     if context:
         parts.append("SOURCE CONTEXT (claims in the output should be supported by this):")
         parts.append(block("SOURCE_CONTEXT", context))
