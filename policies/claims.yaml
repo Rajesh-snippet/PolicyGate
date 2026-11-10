@@ -1,6 +1,6 @@
 # hybrid: patterns catch clear cases; the LLM judge reviews ambiguous ones.
 name: unsupported_claims
-version: 1.1.0
+version: 1.2.0
 severity: medium
 strategy: hybrid
 action: rewrite
@@ -15,6 +15,12 @@ description: >
   covered by medical_overconfidence; opinions; hedged statements; or anything
   supported by the provided source context. If source context is provided, flag
   claims that contradict it or go beyond it.
+
+# Few-shot scope guard: statements the judge must NOT report under this policy.
+non_violations:
+  - "Your order number is 48213."
+  - "The conference room is on the third floor."
+  - "Antibiotics are guaranteed to clear any infection. (A medical guarantee: handled by medical_overconfidence.)"
 
 patterns:
   - "guaranteed returns?"
