@@ -107,3 +107,38 @@ def test_mismatches_are_collected_with_the_judges_reason(examples, registry):
     assert flagged
     assert all(f.reason == "test reason" for m in flagged for f in m.findings
                if f.policy == "unsupported_claims" and f.confidence is not None)
+
+
+def test_judge_failures_are_counted_and_attached_to_mismatches(examples, registry):
+    from app.judge.judge import LLMJudge
+    from evals.run_eval import Mismatch, RunStats, format_judge_stats
+    from tests.fakes import FakeClient
+
+    judge = LLMJudge.from_registry(
+        registry, FakeClient({"brand_tone": TimeoutError("rate limited")})
+    )
+    checks = DeterministicChecks.from_registry(registry)
+    mismatches: list[Mismatch] = []
+    stats = RunStats()
+    evaluate(examples, checks, [p.name for p in registry.all()], judge, mismatches, stats)
+
+    assert stats.failed_policy_calls > 0
+    assert stats.examples_with_failures > 0
+    tone = next(m for m in mismatches if m.example.id == "judge-tone-rude")
+    assert "brand_tone" in tone.false_negatives
+    assert "brand_tone" in tone.judge.failed_policies  # a failed call, not a "no violation" verdict
+    assert "policy calls failed" in format_judge_stats(stats)
+
+
+def test_pause_only_applies_after_examples_the_judge_ran_on(examples, registry, monkeypatch):
+    from app.judge.judge import LLMJudge
+    from tests.fakes import FakeClient
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("evals.run_eval.time.sleep", lambda seconds: sleeps.append(seconds))
+    judge = LLMJudge.from_registry(registry, FakeClient())
+    checks = DeterministicChecks.from_registry(registry)
+    evaluate(examples, checks, [p.name for p in registry.all()], judge, pause=1.5)
+
+    assert sleeps and set(sleeps) == {1.5}
+    assert len(sleeps) < len(examples)  # hard-blocked examples never reach the judge
