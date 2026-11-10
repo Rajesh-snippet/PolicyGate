@@ -39,7 +39,7 @@ def test_policy_fields_are_parsed():
 def test_by_strategy():
     registry = load_policies()
     judged = {p.name for p in registry.by_strategy(Strategy.LLM_JUDGE, Strategy.HYBRID)}
-    assert judged == {"brand_tone", "unsupported_claims"}
+    assert judged == {"brand_tone", "unsupported_claims", "medical_overconfidence"}
 
 
 def test_policies_change_without_code_changes(tmp_path):
