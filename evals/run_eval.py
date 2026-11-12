@@ -11,7 +11,7 @@ live API calls, roughly one or two per judged policy per example):
 """
 import argparse
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -116,6 +116,7 @@ class RunStats:
     examples_with_failures: int = 0
     unverified_discarded: int = 0  # findings dropped: quote not found in the output
     disagreements: int = 0
+    failure_details: list[dict] = field(default_factory=list)
 
 
 def format_judge_stats(stats: RunStats) -> str:
@@ -154,6 +155,13 @@ def evaluate(
         if review is not None and not review.skipped:
             if stats is not None:
                 stats.judged_examples += 1
+                for policy, error in review.failed_policies.items():
+                      stats.failure_details.append({
+                     "example_id": example.id,
+                     "feature_id": example.feature_id,
+                     "policy": policy,
+                     "error": error,
+                       })
                 stats.failed_policy_calls += len(review.failed_policies)
                 stats.examples_with_failures += 1 if review.failed else 0
                 stats.unverified_discarded += review.unverified_discarded
@@ -212,6 +220,17 @@ def main() -> None:
               f"{_fmt(m.precision):>7}{_fmt(m.recall):>8}{_fmt(m.false_positive_rate):>6}")
     if judge:
         print(f"\n{format_judge_stats(stats)}")
+    if stats.failure_details:
+        print("\nFailed judge calls:")
+        for failure in stats.failure_details:
+            print(
+                f"- Example: {failure['example_id']} | "
+                f"Feature: {failure['feature_id']} | "
+                f"Policy: {failure['policy']}"
+            )
+            print(f"  Error: {failure['error']}")
+    else:
+        print("\nFailed judge calls: none")
 
     if args.verbose:
         print(f"\n{len(mismatches)} example(s) with wrong or missed findings:")
@@ -229,8 +248,6 @@ def main() -> None:
                     print(f"  judge skipped: {review.skip_reason}")
                 else:
                     print(f"  judge asked about: {review.judged_policies}")
-                for policy, error in review.failed_policies.items():
-                    print(f"  judge FAILED on {policy}: {error[:120]}")
                 if review.unverified_discarded:
                     print(f"  judge findings discarded (quote not in output): {review.unverified_discarded}")
                 if review.disagreements:
