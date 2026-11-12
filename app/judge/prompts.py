@@ -10,6 +10,14 @@ Rules:
 - Report only violations of the named policy.
 - For every violation, "evidence" must be copied character-for-character from the candidate output. If you cannot quote the exact text, do not report the violation.
 - Respond with JSON only: no prose, no markdown fences.
+- Classify a violation only under the policy whose definition most specifically
+  describes the actual problem.
+- Do not report a violation under this policy merely because the statement
+  sounds suspicious, absolute, or unsupported.
+- If the statement is explicitly excluded by this policy or belongs to a
+  more specific policy category, return no violation.
+- A statement may violate multiple policies only when each violation has
+  separate, independently valid grounds.
 
 Format:
 {"violations": [{"policy": "<policy name>", "severity": "low|medium|high|critical", "evidence": "<exact quote>", "reason": "<one sentence>", "confidence": <number from 0 to 1>}]}
