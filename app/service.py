@@ -67,13 +67,13 @@ class GuardService:
                 request_id=request_id,
                 feature_id=request.feature_id,
                 input_hash=sha256_hex(
-                   json.dumps(
-                             request.model_dump(exclude={"llm_output"}, mode="json"),
-                              sort_keys=True,
-                              separators=(",", ":"),
-                             ensure_ascii=False,
-                  )
-                 ),
+                    json.dumps(
+                        request.model_dump(mode="json"),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=False,
+                            )
+                        ),
                 output_hash=sha256_hex(request.llm_output),
                 policy_version=self.policy_version,
                 decision=outcome.decision,
