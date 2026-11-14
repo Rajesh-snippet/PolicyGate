@@ -62,6 +62,11 @@ class GuardService:
         )
         final_output = request.llm_output if outcome.decision in RELEASABLE else None
 
+                # Raw findings stay internal (the Day 8 rewrite needs the real evidence).
+        # Anything that leaves this method, to the audit log or the client, is scrubbed.
+        safe_findings = [_scrubbed(f) for f in findings]
+        safe_reasons = [scrub(reason) for reason in outcome.reasons]
+
         self.audit.record(
             AuditEntry(
                 request_id=request_id,
@@ -78,8 +83,9 @@ class GuardService:
                 policy_version=self.policy_version,
                 decision=outcome.decision,
                 risk_score=outcome.risk_score,
-                reasons=[scrub(reason) for reason in outcome.reasons],
-                findings=[_scrubbed(f) for f in findings],
+                 reasons=safe_reasons,
+                findings=safe_findings,
+                
                 judge={
                     "skipped": judged.skipped,
                     "skip_reason": judged.skip_reason,
@@ -97,8 +103,8 @@ class GuardService:
             request_id=request_id,
             decision=outcome.decision,
             risk_score=outcome.risk_score,
-            findings=findings,
-            reasons=outcome.reasons,
+            findings=safe_findings,
+            reasons=safe_reasons,
             policy_version=self.policy_version,
             final_output=final_output,
         )
