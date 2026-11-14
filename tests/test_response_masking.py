@@ -45,3 +45,10 @@ def test_audit_log_never_contains_the_raw_value(client_and_log):
     client, log_path = client_and_log
     _post(client, f"Contact me at {EMAIL}")
     assert EMAIL not in log_path.read_text(encoding="utf-8")
+
+def test_masking_preserves_non_pii_text(client_and_log):
+    client, _ = client_and_log
+    response = _post(client, "Please contact our support team for assistance.")
+
+    assert response.status_code == 200
+    assert "Please contact our support team for assistance." in response.text
