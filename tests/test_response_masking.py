@@ -36,8 +36,9 @@ def test_response_masks_pii_in_findings_and_reasons(client_and_log):
 def test_masking_does_not_change_the_decision(client_and_log):
     client, _ = client_and_log
     body = _post(client, f"Contact me at {EMAIL}").json()
+
     assert body["decision"] == "REWRITE"
-    assert body["final_output"] is None
+    assert body["final_output"] == "Contact me at [redacted:email]"
     assert body["findings"][0]["policy"] == "pii_leakage"
 
 
