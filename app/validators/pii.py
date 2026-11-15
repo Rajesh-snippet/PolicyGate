@@ -128,6 +128,10 @@ class PIIDetector:
         if not self.policy.per_feature_override:
             return set()
         return self.feature_allowed.get(feature_id, set()) - NEVER_ALLOWED
+    
+    def active_detectors(self, feature_id: str) -> set[str]:
+        """Return detectors that should run for this feature."""
+        return set(self.policy.detectors) - self._allowed_for(feature_id)
 
     def detect(self, feature_id: str, llm_output: str) -> list[Finding]:
         allowed = self._allowed_for(feature_id)
