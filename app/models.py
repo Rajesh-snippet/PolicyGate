@@ -46,3 +46,5 @@ class GuardResponse(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     final_output: str | None = None
+    reason_code: str | None = None
+    message: str | None = None
