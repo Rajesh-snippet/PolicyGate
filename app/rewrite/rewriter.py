@@ -29,6 +29,7 @@ class RewriteAttempt:
     final_output: str | None
     reasons: list[str] = field(default_factory=list)
     blocking_policy: str | None = None
+    findings: list[Finding] = field(default_factory=list)
 
     def merge_reasons(self, base: list[str]) -> list[str]:
         """Keep reasons ordered with the deciding one first."""
