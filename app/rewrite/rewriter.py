@@ -48,13 +48,20 @@ class Rewriter:
         pii = self.redactor.policy.name
         if {f.policy for f in findings if f.action == Decision.REWRITE} != {pii}:
             return None  # other policies need an LLM rewrite or schema repair (8c, 8d)
-
         redacted = self.redactor.redact(request.feature_id, request.llm_output)
         rechecked = self.checks.run(request.feature_id, redacted).findings
+
         unresolved = [f for f in rechecked if f.action in NEEDS_ESCALATION]
+
         if unresolved:
-            return self._fall_back(unresolved)
-        return RewriteAttempt(Decision.REWRITE, redacted, [f"{pii} redacted, re-check clean"])
+           return self._fall_back(unresolved, rechecked)
+
+        return RewriteAttempt(
+         Decision.REWRITE,
+           redacted,
+          [f"{pii} redacted, re-check clean"],
+          findings=rechecked,
+        )
 
     def _fall_back(self, unresolved: list[Finding]) -> RewriteAttempt:
         steps = [(f.policy, self._step_for(f)) for f in unresolved]
