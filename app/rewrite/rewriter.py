@@ -63,19 +63,30 @@ class Rewriter:
           findings=rechecked,
         )
 
-    def _fall_back(self, unresolved: list[Finding]) -> RewriteAttempt:
-        steps = [(f.policy, self._step_for(f)) for f in unresolved]
-        policy, decision = max(steps, key=lambda s: ACTION_RANK[s[1]])
-        reasons = [
-            f"{name} still failing after rewrite -> {step.value}"
-            for name, step in sorted(set(steps), key=lambda s: ACTION_RANK[s[1]], reverse=True)
-        ]
-        return RewriteAttempt(
-            decision,
-            None,
-            reasons,
-            blocking_policy=policy if decision == Decision.BLOCK else None,
+def _fall_back(
+    self,
+    unresolved: list[Finding],
+    rechecked: list[Finding],
+) -> RewriteAttempt:
+    steps = [(f.policy, self._step_for(f)) for f in unresolved]
+    policy, decision = max(steps, key=lambda s: ACTION_RANK[s[1]])
+
+    reasons = [
+        f"{name} still failing after rewrite -> {step.value}"
+        for name, step in sorted(
+            set(steps),
+            key=lambda s: ACTION_RANK[s[1]],
+            reverse=True,
         )
+    ]
+
+    return RewriteAttempt(
+        decision,
+        None,
+        reasons,
+        blocking_policy=policy if decision == Decision.BLOCK else None,
+        findings=rechecked,
+    )
 
     def _step_for(self, finding: Finding) -> Decision:
         if finding.action in VALID_FALLBACKS:
