@@ -80,11 +80,15 @@ class GuardService:
 
         if decision == Decision.REWRITE and self.rewriter is not None:
             attempt = self.rewriter.attempt(request, findings)
-            if attempt is not None:
-                decision = attempt.decision
-                final_output = attempt.final_output
-                reasons = attempt.merge_reasons(reasons)
-                blocked_by = attempt.blocking_policy
+
+        if attempt is not None:
+         decision = attempt.decision
+        final_output = attempt.final_output
+        reasons = attempt.merge_reasons(reasons)
+        blocked_by = attempt.blocking_policy
+
+        # Preserve initial findings and append new re-check findings.
+        findings.extend(attempt.findings)
         if decision == Decision.BLOCK and blocked_by is None:
             blocked_by = blocking_policy(findings, self.engine.low_confidence_threshold)
 
