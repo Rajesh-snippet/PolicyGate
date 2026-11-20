@@ -250,12 +250,22 @@ def test_missing_or_invalid_fallback_goes_to_human_review():
 
 
 def test_new_blocking_finding_in_recheck_blocks():
-    worse = _FixedChecks([_finding("unsafe_instruction", Decision.BLOCK, Severity.CRITICAL)])
+    worse = _FixedChecks([
+        _finding("unsafe_instruction", Decision.BLOCK, Severity.CRITICAL)
+    ])
+
     out = _rewriter(worse).attempt(
-        _request(f"Mail {EMAIL}"), [_finding("pii_leakage", Decision.REWRITE)]
+        _request(f"Mail {EMAIL}"),
+        [_finding("pii_leakage", Decision.REWRITE)],
     )
+
     assert out.decision == Decision.BLOCK
     assert out.blocking_policy == "unsafe_instruction"
+    assert out.final_output is None
+
+    # Re-check findings must be returned.
+    assert len(out.findings) == 1
+    assert out.findings[0].policy == "unsafe_instruction"
 
 
 def test_warning_in_recheck_does_not_fail_the_rewrite():
